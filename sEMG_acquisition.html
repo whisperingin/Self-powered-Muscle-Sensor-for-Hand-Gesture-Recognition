@@ -1,0 +1,855 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Design and Implementation of the Surface EMG Acquisition System (Version 9)</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --surface2: #f8f9fb;
+      --border: #dde1e8;
+      --text: #1a1d23;
+      --muted: #6b7280;
+      --muted2: #9ca3af;
+      --accent: #2563eb;
+      --ok: #16a34a;
+      --warn: #d97706;
+      --bad: #dc2626;
+      --ch1: #60a5fa;
+      --ch2: #a78bfa;
+      --ch3: #fb923c;
+      --ch4: #f472b6;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'IBM Plex Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    #app { max-width: 1280px; margin: 0 auto; }
+
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+      gap: 12px;
+    }
+
+    .title-block h1 { font-size: 18px; font-weight: 600; }
+    .title-block p {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--muted2);
+      margin-top: 4px;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .conn-block { display: flex; align-items: center; gap: 12px; }
+    .conn-info {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      padding: 5px 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      background: var(--surface);
+    }
+    .conn-info.ok {
+      border-color: #86efac;
+      color: var(--ok);
+      background: #f0fdf4;
+    }
+
+    .fps-badge {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      color: var(--accent);
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      padding: 4px 10px;
+      border-radius: 20px;
+      white-space: nowrap;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+    }
+
+    .left-panel { display: flex; flex-direction: column; gap: 12px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .card-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--muted2);
+      margin-bottom: 12px;
+    }
+
+    #status-panel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 16px;
+      text-align: center;
+      transition: background 0.25s, border-color 0.25s;
+    }
+
+    #status-panel.state-action { background: #f0fdf4; border-color: #bbf7d0; }
+    #status-panel.state-prep { background: #fffbeb; border-color: #fde68a; }
+    #status-panel.state-rest { background: var(--surface2); border-color: var(--border); }
+
+    .state-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--muted2);
+      margin: 0 auto 10px;
+    }
+    .state-dot.action { background: var(--ok); animation: pulse 1.2s ease-in-out infinite; }
+    .state-dot.prep { background: var(--warn); }
+
+    @keyframes pulse { 0%,100% {opacity:1} 50% {opacity:0.3} }
+
+    #stage-text { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+    #sub-text {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      line-height: 1.5;
+      white-space: pre-line;
+    }
+    #timer {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 52px;
+      font-weight: 600;
+      line-height: 1;
+      display: block;
+    }
+    #status-panel.state-action #timer { color: var(--ok); }
+    #status-panel.state-prep #timer { color: var(--warn); }
+
+    .ctrl-panel { display: flex; flex-direction: column; gap: 8px; }
+
+    .btn {
+      width: 100%;
+      padding: 10px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'IBM Plex Sans', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      transition: all 0.12s;
+      text-align: center;
+      border: 1px solid transparent;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+    .btn-connect { background: #eff6ff; color: var(--accent); border-color: #bfdbfe; }
+    .btn-connect:hover:not(:disabled) { background: #dbeafe; }
+
+    .btn-start { background: var(--ok); color: #fff; border-color: var(--ok); }
+    .btn-start:hover:not(:disabled) { background: #15803d; }
+
+    .btn-pause { background: var(--surface2); color: var(--text); border-color: var(--border); }
+    .btn-pause:hover:not(:disabled) { background: #eaecf0; }
+
+    .btn-bad { background: #fef2f2; color: var(--bad); border-color: #fecaca; }
+    .btn-bad:hover:not(:disabled) { background: #fee2e2; }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 5px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-label {
+      color: var(--muted);
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+    }
+    .stat-val {
+      color: var(--text);
+      font-weight: 600;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+    }
+
+    .legend-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      font-family: 'IBM Plex Mono', monospace;
+      gap: 8px;
+    }
+    .legend-row:last-child { border-bottom: none; }
+    .legend-row span { color: var(--muted); }
+    .legend-row b { color: var(--text); font-weight: 600; }
+
+    .btn-dl {
+      width: 100%;
+      background: var(--surface2);
+      color: var(--accent);
+      border: 1px solid #bfdbfe;
+      padding: 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      transition: all 0.12s;
+    }
+    .btn-dl:hover:not(:disabled) { background: #eff6ff; }
+    .btn-dl:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    .charts-area {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 12px;
+      min-height: 640px;
+    }
+
+    .plot-box {
+      background: #0f1117;
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #e2e5ea;
+      min-height: 220px;
+    }
+
+    canvas { width: 100%; height: 100%; display: block; }
+
+    .ch-label {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 2px 7px;
+      border-radius: 3px;
+      z-index: 10;
+    }
+
+    .ch1 { color: #93c5fd; background: rgba(37,99,235,0.25); }
+    .ch2 { color: #c4b5fd; background: rgba(124,58,237,0.25); }
+    .ch3 { color: #fdba74; background: rgba(234,88,12,0.25); }
+    .ch4 { color: #f9a8d4; background: rgba(219,39,119,0.25); }
+
+    .val-display {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(255,255,255,0.55);
+      z-index: 10;
+    }
+
+    @media (max-width: 900px) {
+      body { padding: 12px; }
+      .main-grid { grid-template-columns: 1fr; }
+      .charts-area { grid-template-columns: 1fr; grid-template-rows: repeat(4, 180px); min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="top-bar">
+    <div class="title-block">
+      <h1>Design and Implementation of the Surface EMG Acquisition System (Version 9)</h1>
+      <p>STM32 · 2000 Hz · 4 CH · 12-bit ADC · 921600 Baud · binary seq/status packets with CRC16</p>
+    </div>
+    <div class="conn-block">
+      <div class="conn-info" id="conn-info">Not connected</div>
+      <div class="fps-badge" id="fps-stm">0 Hz</div>
+    </div>
+  </div>
+
+  <div class="main-grid">
+    <div class="left-panel">
+      <div id="status-panel" class="state-rest">
+        <div class="state-dot" id="state-dot"></div>
+        <div id="stage-text">Waiting for connection</div>
+        <div id="sub-text">Please connect STM32 first</div>
+        <span id="timer">--</span>
+      </div>
+
+      <div class="card ctrl-panel">
+        <button class="btn btn-connect" onclick="connectSTM32()" id="btn-conn">Connect STM32</button>
+        <button class="btn btn-start" onclick="startExperiment()" id="btn-start" disabled>Start Experiment</button>
+        <button class="btn btn-pause" onclick="togglePause()" id="btn-pause" disabled>Pause</button>
+        <button class="btn btn-bad" onclick="markBad()" id="btn-bad" disabled>Mark Invalid (Last 3s)</button>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Acquisition Stats</div>
+        <div class="stat-row"><span class="stat-label">Recorded Samples</span><span class="stat-val" id="cnt-stm">0</span></div>
+        <div class="stat-row"><span class="stat-label">Current Label</span><span class="stat-val" id="cur-label">—</span></div>
+        <div class="stat-row"><span class="stat-label">Current Gesture</span><span class="stat-val" id="cur-gesture">—</span></div>
+        <div class="stat-row"><span class="stat-label">Loss (est.)</span><span class="stat-val" id="lost-est">0</span></div>
+        <div class="stat-row"><span class="stat-label">Loss rate</span><span class="stat-val" id="lost-rate">0.00%</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Label Definition</div>
+        <div class="legend-row"><span>Rest task</span><b>0</b></div>
+        <div class="legend-row"><span>Fist / Spread / Flexion / Extension</span><b>1 ~ 4</b></div>
+        <div class="legend-row"><span>Pronation / Supination</span><b>5 ~ 6</b></div>
+        <div class="legend-row"><span>Inter-trial relax</span><b>-4</b></div>
+        <div class="legend-row"><span>Transition</span><b>-2</b></div>
+        <div class="legend-row"><span>Invalid mark</span><b>-3</b></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Firmware Signal Chain</div>
+        <div class="legend-row"><span>Sampling rate</span><b>2000 Hz</b></div>
+        <div class="legend-row"><span>High-pass</span><b>20 Hz Butterworth</b></div>
+        <div class="legend-row"><span>Notch</span><b>50 Hz Notch (Q=5)</b></div>
+        <div class="legend-row"><span>Low-pass</span><b>400 Hz (4th-order)</b></div>
+        <div class="legend-row"><span>ADC resolution</span><b>12-bit (0~4095)</b></div>
+        <div class="legend-row"><span>Transport</span><b>Binary packet + CRC16</b></div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Export Data</div>
+        <button class="btn-dl" onclick="downloadData()" id="dl-data" disabled>Download Dataset (CSV)</button>
+      </div>
+    </div>
+
+    <div class="charts-area">
+      <div class="plot-box"><div class="ch-label ch1">CH 1</div><div class="val-display" id="val-ch1">—</div><canvas id="cvs1"></canvas></div>
+      <div class="plot-box"><div class="ch-label ch2">CH 2</div><div class="val-display" id="val-ch2">—</div><canvas id="cvs2"></canvas></div>
+      <div class="plot-box"><div class="ch-label ch3">CH 3</div><div class="val-display" id="val-ch3">—</div><canvas id="cvs3"></canvas></div>
+      <div class="plot-box"><div class="ch-label ch4">CH 4</div><div class="val-display" id="val-ch4">—</div><canvas id="cvs4"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CONFIG = {
+  stmBaud: 921600,
+  fs: 2000,
+  reps: 5,
+  timings: {
+    relax: 4,
+    prep: 2,
+    action: 6
+  }
+};
+
+const GESTURES = [
+  '1. Static Rest',
+  '2. Fist',
+  '3. Spread',
+  '4. Flexion',
+  '5. Extension',
+  '6. Pronation',
+  '7. Supination'
+];
+
+const CH_COLORS = ['#60a5fa', '#a78bfa', '#fb923c', '#f472b6'];
+const LOST_SENTINEL = 65535;
+
+const BIN_SYNC1 = 0xAA;
+const BIN_SYNC2 = 0x55;
+const BIN_PKT_SIZE = 17;
+
+let rawData = []; // {idx, seq, status, lossEst, d:[4], l}
+let isRecording = false;
+let isPaused = false;
+let currentLabel = -4;
+let portSTM = null;
+let charts = {};
+let sampleIndex = 0;
+let drawCounter = 0;
+
+let streamMode = 'seq_status';
+let lastSeq = null;
+let recordingSeqBase = null;
+
+const metrics = {
+  accepted: 0,
+  invalid: 0,
+  duplicateOrOutOfOrder: 0,
+  lossByGap: 0,
+  lossByStatus: 0,
+  insertedGapRows: 0
+};
+
+window.onload = function () {
+  const ids = ['cvs1', 'cvs2', 'cvs3', 'cvs4'];
+  ids.forEach((id, i) => {
+    const cvs = document.getElementById(id);
+    const box = cvs.parentElement;
+    const dpr = window.devicePixelRatio || 1;
+    cvs.width = box.clientWidth * dpr;
+    cvs.height = box.clientHeight * dpr;
+    const ctx = cvs.getContext('2d', { alpha: false });
+    ctx.scale(dpr, dpr);
+    ctx.fillStyle = '#0f1117';
+    ctx.fillRect(0, 0, box.clientWidth, box.clientHeight);
+    charts[id] = {
+      ctx,
+      w: box.clientWidth,
+      h: box.clientHeight,
+      x: 0,
+      lastY: box.clientHeight / 2,
+      color: CH_COLORS[i]
+    };
+  });
+};
+
+function resetMetrics() {
+  metrics.accepted = 0;
+  metrics.invalid = 0;
+  metrics.duplicateOrOutOfOrder = 0;
+  metrics.lossByGap = 0;
+  metrics.lossByStatus = 0;
+  metrics.insertedGapRows = 0;
+  streamMode = 'seq_status';
+  lastSeq = null;
+}
+
+function updateLossStats() {
+  const est = metrics.lossByGap + metrics.lossByStatus;
+  const denom = metrics.accepted + metrics.lossByGap;
+  const rate = denom > 0 ? (est * 100 / denom) : 0;
+  document.getElementById('lost-est').textContent = String(est);
+  document.getElementById('lost-rate').textContent = rate.toFixed(2) + '%';
+}
+
+function concatUint8(a, b) {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+function rdU16LE(buf, offset) {
+  return buf[offset] | (buf[offset + 1] << 8);
+}
+
+function rdU32LE(buf, offset) {
+  return (
+    (buf[offset]) |
+    (buf[offset + 1] << 8) |
+    (buf[offset + 2] << 16) |
+    (buf[offset + 3] << 24)
+  ) >>> 0;
+}
+
+function crc16CcittFalse(data) {
+  let crc = 0xFFFF;
+
+  for (let i = 0; i < data.length; i++) {
+    crc ^= (data[i] << 8);
+
+    for (let b = 0; b < 8; b++) {
+      if (crc & 0x8000) {
+        crc = ((crc << 1) ^ 0x1021) & 0xFFFF;
+      } else {
+        crc = (crc << 1) & 0xFFFF;
+      }
+    }
+  }
+
+  return crc;
+}
+
+function parseBinaryPacket(pkt) {
+  if (pkt.length !== BIN_PKT_SIZE) return null;
+  if (pkt[0] !== BIN_SYNC1 || pkt[1] !== BIN_SYNC2) return null;
+
+  const seq = rdU32LE(pkt, 2);
+  const status = pkt[6];
+
+  if (!(status === 0 || status === 1)) return null;
+
+  const v1 = rdU16LE(pkt, 7);
+  const v2 = rdU16LE(pkt, 9);
+  const v3 = rdU16LE(pkt, 11);
+  const v4 = rdU16LE(pkt, 13);
+
+  if (lastSeq !== null && seq <= lastSeq) {
+    return { kind: 'dup' };
+  }
+
+  const gap = (lastSeq !== null) ? Math.max(0, seq - lastSeq - 1) : 0;
+
+  return {
+    kind: 'ok',
+    seq,
+    status,
+    values: [v1, v2, v3, v4],
+    gap,
+    lossEst: status === 1 ? 1 : 0
+  };
+}
+
+function makeRecord(seq, status, values, label, lossEst) {
+  let idx;
+  if (streamMode === 'seq_status') {
+    if (recordingSeqBase === null) {
+      recordingSeqBase = seq;
+    }
+    idx = seq - recordingSeqBase;
+    sampleIndex = idx + 1;
+  } else {
+    idx = sampleIndex;
+    sampleIndex += 1;
+  }
+
+  rawData.push({
+    idx,
+    seq,
+    status,
+    lossEst,
+    d: values,
+    l: label
+  });
+
+  document.getElementById('cnt-stm').textContent = rawData.length;
+  document.getElementById('cur-label').textContent = String(currentLabel);
+}
+
+async function connectSTM32() {
+  try {
+    portSTM = await navigator.serial.requestPort();
+    await portSTM.open({ baudRate: CONFIG.stmBaud });
+
+    document.getElementById('conn-info').textContent = 'STM32 Connected ✓';
+    document.getElementById('conn-info').classList.add('ok');
+    document.getElementById('btn-conn').disabled = true;
+    document.getElementById('btn-start').disabled = false;
+    document.getElementById('stage-text').textContent = 'Device Ready';
+    document.getElementById('sub-text').textContent = 'Binary packet stream is ready.\nClick [Start Experiment] to begin.';
+
+    readLoopSTM(portSTM);
+  } catch (e) {
+    alert('Connection failed: ' + e);
+  }
+}
+
+async function readLoopSTM(port) {
+  const reader = port.readable.getReader();
+  let rxBuf = new Uint8Array(0);
+
+  let lastT = Date.now();
+  let count = 0;
+
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (!value || value.length === 0) continue;
+
+      rxBuf = concatUint8(rxBuf, value);
+
+      let used = 0;
+
+      while ((rxBuf.length - used) >= BIN_PKT_SIZE) {
+        if (rxBuf[used] !== BIN_SYNC1 || rxBuf[used + 1] !== BIN_SYNC2) {
+          used += 1;
+          metrics.invalid += 1;
+          continue;
+        }
+
+        const pkt = rxBuf.subarray(used, used + BIN_PKT_SIZE);
+        const crcRx = rdU16LE(pkt, 15);
+        const crcCalc = crc16CcittFalse(pkt.subarray(0, 15));
+
+        if (crcRx !== crcCalc) {
+          used += 1;
+          metrics.invalid += 1;
+          continue;
+        }
+
+        const parsed = parseBinaryPacket(pkt);
+
+        if (!parsed) {
+          metrics.invalid += 1;
+          used += BIN_PKT_SIZE;
+          continue;
+        }
+
+        if (parsed.kind === 'dup') {
+          metrics.duplicateOrOutOfOrder += 1;
+          used += BIN_PKT_SIZE;
+          continue;
+        }
+
+        if (parsed.gap > 0) {
+          metrics.lossByGap += parsed.gap;
+
+          if (isRecording && streamMode === 'seq_status') {
+            const start = (lastSeq === null) ? (parsed.seq - parsed.gap) : (lastSeq + 1);
+            for (let s = start; s < parsed.seq; s++) {
+              makeRecord(
+                s,
+                1,
+                [LOST_SENTINEL, LOST_SENTINEL, LOST_SENTINEL, LOST_SENTINEL],
+                currentLabel,
+                1
+              );
+              metrics.insertedGapRows += 1;
+            }
+          }
+        }
+
+        if (parsed.status === 1) {
+          metrics.lossByStatus += 1;
+        }
+
+        metrics.accepted += 1;
+
+        if (isRecording) {
+          makeRecord(parsed.seq, parsed.status, parsed.values, currentLabel, parsed.lossEst);
+        }
+
+        lastSeq = parsed.seq;
+
+        drawCounter += 1;
+        if (drawCounter % 5 === 0 && parsed.status === 0) {
+          const [v1, v2, v3, v4] = parsed.values;
+          draw(Math.max(0, Math.min(4095, v1)), 'cvs1');
+          draw(Math.max(0, Math.min(4095, v2)), 'cvs2');
+          draw(Math.max(0, Math.min(4095, v3)), 'cvs3');
+          draw(Math.max(0, Math.min(4095, v4)), 'cvs4');
+          document.getElementById('val-ch1').textContent = String(Math.round(v1));
+          document.getElementById('val-ch2').textContent = String(Math.round(v2));
+          document.getElementById('val-ch3').textContent = String(Math.round(v3));
+          document.getElementById('val-ch4').textContent = String(Math.round(v4));
+        }
+
+        count += 1;
+        used += BIN_PKT_SIZE;
+      }
+
+      if (used > 0) {
+        rxBuf = rxBuf.slice(used);
+      }
+
+      const now = Date.now();
+      if (now - lastT >= 1000) {
+        document.getElementById('fps-stm').textContent = Math.round(count * 1000 / (now - lastT)) + ' Hz';
+        count = 0;
+        lastT = now;
+      }
+
+      updateLossStats();
+    }
+  } catch (e) {
+    console.error('STM32 binary read error:', e);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function draw(val, id) {
+  const c = charts[id];
+  const ctx = c.ctx;
+  const step = 2;
+
+  if (c.x >= c.w) {
+    c.x = 0;
+    ctx.fillStyle = '#0f1117';
+    ctx.fillRect(0, 0, c.w, c.h);
+  }
+
+  const y = c.h - (val / 4095) * c.h;
+
+  ctx.fillStyle = 'rgba(15,17,23,0.85)';
+  ctx.fillRect(c.x + step, 0, 20, c.h);
+
+  ctx.strokeStyle = c.color;
+  ctx.lineWidth = 1.5;
+  ctx.shadowColor = c.color;
+  ctx.shadowBlur = 4;
+  ctx.beginPath();
+  ctx.moveTo(c.x, c.lastY);
+  ctx.lineTo(c.x + step, y);
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  c.x += step;
+  c.lastY = y;
+}
+
+async function startExperiment() {
+  if (!portSTM) {
+    alert('Please connect STM32 first');
+    return;
+  }
+
+  rawData = [];
+  sampleIndex = 0;
+  recordingSeqBase = null;
+  isRecording = true;
+  isPaused = false;
+
+  resetMetrics();
+  updateLossStats();
+
+  document.getElementById('cnt-stm').textContent = '0';
+  document.getElementById('cur-label').textContent = '—';
+  document.getElementById('cur-gesture').textContent = '—';
+  document.getElementById('btn-start').disabled = true;
+  document.getElementById('btn-pause').disabled = false;
+  document.getElementById('btn-pause').textContent = 'Pause';
+  document.getElementById('btn-bad').disabled = false;
+  document.getElementById('dl-data').disabled = true;
+
+  for (let r = 0; r < CONFIG.reps; r++) {
+    for (let g = 0; g < GESTURES.length; g++) {
+      document.getElementById('cur-gesture').textContent = GESTURES[g];
+
+      setPanel('rest', 'Relax', `Next: ${GESTURES[g]}`);
+      await phase(CONFIG.timings.relax, -4);
+
+      setPanel('prep', 'Prepare', `Target: ${GESTURES[g]}`);
+      await phase(CONFIG.timings.prep, -4);
+
+      setPanel('action', 'Hold Action', GESTURES[g]);
+      await phaseAction(CONFIG.timings.action, g);
+    }
+  }
+
+  finish();
+}
+
+async function phase(sec, label) {
+  currentLabel = label;
+  for (let i = sec; i > 0; i--) {
+    if (isPaused) await waitPause();
+    document.getElementById('timer').textContent = i;
+    await sleep(1000);
+  }
+}
+
+async function phaseAction(sec, taskLabel) {
+  currentLabel = -2;
+  document.getElementById('timer').textContent = sec;
+  if (isPaused) await waitPause();
+  await sleep(1000);
+
+  currentLabel = taskLabel;
+  for (let i = sec - 1; i > 1; i--) {
+    if (isPaused) await waitPause();
+    document.getElementById('timer').textContent = i;
+    await sleep(1000);
+  }
+
+  currentLabel = -2;
+  document.getElementById('timer').textContent = 1;
+  if (isPaused) await waitPause();
+  await sleep(1000);
+}
+
+function setPanel(state, main, sub) {
+  const p = document.getElementById('status-panel');
+  const dot = document.getElementById('state-dot');
+  p.className = 'state-' + state;
+  dot.className = 'state-dot ' + (state === 'action' ? 'action' : state === 'prep' ? 'prep' : '');
+  document.getElementById('stage-text').textContent = main;
+  document.getElementById('sub-text').textContent = sub;
+}
+
+async function waitPause() {
+  document.getElementById('timer').textContent = '||';
+  while (isPaused) {
+    await sleep(100);
+  }
+}
+
+function togglePause() {
+  isPaused = !isPaused;
+  document.getElementById('btn-pause').textContent = isPaused ? 'Resume' : 'Pause';
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function markBad() {
+  const lookback = 6000;
+  const lastIdx = rawData.length ? rawData[rawData.length - 1].idx : sampleIndex;
+  const cutIdx = lastIdx - lookback;
+
+  for (let i = rawData.length - 1; i >= 0; i--) {
+    if (rawData[i].idx < cutIdx) break;
+    rawData[i].l = -3;
+  }
+
+  const btn = document.getElementById('btn-bad');
+  const old = btn.textContent;
+  btn.textContent = 'Marked Invalid (-3)';
+  setTimeout(() => { btn.textContent = old; }, 1200);
+}
+
+function finish() {
+  isRecording = false;
+  setPanel('rest', 'Experiment Finished', 'Click the button below to export data');
+  document.getElementById('timer').textContent = 'END';
+  document.getElementById('btn-start').disabled = false;
+  document.getElementById('btn-pause').disabled = true;
+  document.getElementById('btn-bad').disabled = true;
+  document.getElementById('dl-data').disabled = false;
+  document.getElementById('cur-label').textContent = '—';
+  document.getElementById('cur-gesture').textContent = '—';
+}
+
+function saveCSV(content, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: 'text/csv' }));
+  a.download = filename;
+  a.click();
+}
+
+function downloadData() {
+  if (!rawData.length) {
+    alert('No data');
+    return;
+  }
+
+  let c = 'Time_ms,Seq,PacketStatus,LossEstimated,CH1,CH2,CH3,CH4,Label\n';
+  rawData.forEach(r => {
+    c += `${(r.idx * 0.5).toFixed(1)},${r.seq},${r.status},${r.lossEst},${r.d[0]},${r.d[1]},${r.d[2]},${r.d[3]},${r.l}\n`;
+  });
+
+  saveCSV(c, 'EMG_Dataset_V9_Updated.csv');
+}
+</script>
+</body>
+</html>

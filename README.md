@@ -180,7 +180,7 @@ This allows the system to move towards real-time embedded gesture recognition.
 - The zipped hardware and embedded project files should be extracted before use.
 - Python dependencies may need to be installed before running the training and preprocessing scripts.
 - The acquisition, preprocessing, training, and prediction stages are intended to work as one complete pipeline.
-
+  welcome to connect me with this email: wangxigan2004@163.com
 ---
 
 ## Author
